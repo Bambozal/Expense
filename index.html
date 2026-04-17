@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#0a0a0a" />
+<title>My Expenses</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { background: #0a0a0a; color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; min-height: 100vh; }
+  body { padding: 16px 16px calc(120px + env(safe-area-inset-bottom)) 16px; max-width: 720px; margin: 0 auto; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-top: env(safe-area-inset-top); }
+  h1 { font-size: 20px; font-weight: 600; }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #888; display: inline-block; margin-right: 6px; }
+  .sync-dot.ok { background: #4ade80; }
+  .sync-dot.err { background: #f87171; }
+  .sync-status { font-size: 12px; color: #888; display: flex; align-items: center; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .card { background: #1a1a1a; border-radius: 12px; padding: 14px; }
+  .card-label { font-size: 12px; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .card-value { font-size: 22px; font-weight: 600; }
+  .card-value.income { color: #4ade80; }
+  .card-value.expense { color: #f87171; }
+  .section { background: #1a1a1a; border-radius: 12px; padding: 14px; margin-bottom: 16px; }
+  .section h2 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #ccc; }
+  .month-row, .cat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #2a2a2a; }
+  .month-row:last-child, .cat-row:last-child { border-bottom: none; }
+  .month-name { font-weight: 500; }
+  .month-nums { display: flex; gap: 10px; font-size: 13px; }
+  .pos { color: #4ade80; } .neg { color: #f87171; }
+  .cat-bar { flex: 1; height: 6px; background: #2a2a2a; border-radius: 3px; margin: 0 10px; overflow: hidden; }
+  .cat-fill { height: 100%; background: #3b82f6; }
+  .entry { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #2a2a2a; }
+  .entry:last-child { border-bottom: none; }
+  .entry-left { flex: 1; min-width: 0; }
+  .entry-desc { font-size: 14px; font-weight: 500; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .entry-meta { font-size: 12px; color: #888; }
+  .entry-amount { font-size: 14px; font-weight: 600; margin-left: 10px; white-space: nowrap; }
+  .entry-del { background: none; border: none; color: #666; font-size: 18px; padding: 0 0 0 10px; cursor: pointer; }
+  .empty { color: #666; font-size: 13px; text-align: center; padding: 16px 0; }
+  .fab { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); right: 20px; width: 56px; height: 56px; border-radius: 50%; background: #3b82f6; color: white; border: none; font-size: 28px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 10; }
+  .fab:active { transform: scale(0.95); }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .btn { background: #2a2a2a; color: #f5f5f5; border: none; padding: 8px 12px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+  .btn:active { background: #333; }
+  .btn-danger { color: #f87171; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: flex-end; justify-content: center; z-index: 100; }
+  .modal.open { display: flex; }
+  .modal-inner { background: #1a1a1a; width: 100%; max-width: 500px; border-radius: 16px 16px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)) 20px; }
+  .modal-inner h3 { font-size: 16px; margin-bottom: 14px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; }
+  input, select { width: 100%; background: #2a2a2a; border: 1px solid #333; color: #f5f5f5; padding: 10px 12px; border-radius: 8px; font-size: 15px; font-family: inherit; }
+  input:focus, select:focus { outline: none; border-color: #3b82f6; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .btn-primary { background: #3b82f6; color: white; flex: 1; padding: 12px; font-size: 15px; font-weight: 500; }
+  .btn-ghost { background: transparent; color: #888; padding: 12px 16px; }
+  .setup { background: #1a1a1a; border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid #333; }
+  .setup h2 { font-size: 16px; margin-bottom: 8px; }
+  .setup p { font-size: 13px; color: #aaa; margin-bottom: 10px; line-height: 1.5; }
+  .setup code { background: #0a0a0a; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  textarea { width: 100%; background: #0a0a0a; color: #4ade80; font-family: monospace; font-size: 11px; padding: 10px; border-radius: 8px; border: 1px solid #333; height: 120px; resize: vertical; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>My Expenses</h1>
+  <div class="sync-status"><span class="sync-dot" id="sync-dot"></span><span id="sync-text">Local only</span></div>
+</div>
+
+<div id="setup-panel" class="setup" style="display: none;">
+  <h2>Enable cloud sync (optional)</h2>
+  <p>Paste your Firebase config below to sync data across your phone and laptop. If you skip this, data stays on this device only. Setup guide is in the README.</p>
+  <textarea id="firebase-config" placeholder='{
+  "apiKey": "...",
+  "authDomain": "yourapp.firebaseapp.com",
+  "projectId": "yourapp",
+  "databaseURL": "https://yourapp.firebaseio.com"
+}'></textarea>
+  <div style="margin-top: 10px; display: flex; gap: 8px;">
+    <button class="btn btn-primary" id="save-config">Save & connect</button>
+    <button class="btn btn-ghost" id="skip-config">Skip (local only)</button>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card"><div class="card-label">Income</div><div class="card-value income" id="stat-income">$0.00</div></div>
+  <div class="card"><div class="card-label">Expenses</div><div class="card-value expense" id="stat-expense">$0.00</div></div>
+  <div class="card"><div class="card-label">Savings</div><div class="card-value" id="stat-savings">$0.00</div></div>
+  <div class="card"><div class="card-label">This month</div><div class="card-value" id="stat-month">$0.00</div></div>
+</div>
+
+<div class="toolbar">
+  <button class="btn" id="export-btn">Export Excel</button>
+  <button class="btn" id="csv-btn">Export CSV</button>
+  <button class="btn" id="config-btn">Cloud sync</button>
+  <button class="btn btn-danger" id="clear-btn">Clear all</button>
+</div>
+
+<div class="section">
+  <h2>Monthly breakdown</h2>
+  <div id="monthly-list"></div>
+</div>
+
+<div class="section">
+  <h2>By category (this month)</h2>
+  <div id="category-list"></div>
+</div>
+
+<div class="section">
+  <h2>All entries</h2>
+  <div id="entries-list"></div>
+</div>
+
+<button class="fab" id="fab">+</button>
+
+<div class="modal" id="modal">
+  <div class="modal-inner">
+    <h3>Add expense</h3>
+    <div class="field">
+      <label>Description</label>
+      <input type="text" id="f-desc" placeholder="e.g. lunch at canteen" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Amount</label>
+      <input type="number" id="f-amount" placeholder="0.00" step="0.01" inputmode="decimal" />
+    </div>
+    <div class="field">
+      <label>Category</label>
+      <select id="f-category">
+        <option value="Food">Food</option>
+        <option value="Transport">Transport</option>
+        <option value="Bills">Bills</option>
+        <option value="Shopping">Shopping</option>
+        <option value="Entertainment">Entertainment</option>
+        <option value="Health">Health</option>
+        <option value="Education">Education</option>
+        <option value="Other">Other</option>
+        <option value="Income">Income</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Date</label>
+      <input type="date" id="f-date" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="cancel-btn">Cancel</button>
+      <button class="btn btn-primary" id="save-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const $ = id => document.getElementById(id);
+const fmt = n => '$' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const LOCAL_KEY = 'expenses_local_v1';
+const CONFIG_KEY = 'firebase_config_v1';
+
+let entries = [];
+let db = null;
+let entriesCol = null;
+let unsubscribe = null;
+
+// --- Local storage fallback ---
+function loadLocal() {
+  try { entries = JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]'); }
+  catch (e) { entries = []; }
+}
+function saveLocal() {
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(entries));
+}
+
+// --- Firebase setup ---
+async function initFirebase(config) {
+  try {
+    const app = initializeApp(config);
+    db = getFirestore(app);
+    entriesCol = collection(db, 'expenses');
+
+    // Migrate local data to cloud on first connect
+    const existing = await getDocs(entriesCol);
+    if (existing.empty && entries.length > 0) {
+      const batch = writeBatch(db);
+      entries.forEach(e => {
+        const ref = doc(entriesCol);
+        batch.set(ref, { desc: e.desc, amount: e.amount, category: e.category, date: e.date, createdAt: e.id || Date.now() });
+      });
+      await batch.commit();
+    }
+
+    // Live sync
+    unsubscribe = onSnapshot(entriesCol, snap => {
+      entries = [];
+      snap.forEach(d => entries.push({ id: d.id, ...d.data() }));
+      render();
+      setSyncStatus('ok', 'Synced');
+    }, err => {
+      console.error(err);
+      setSyncStatus('err', 'Sync error');
+    });
+
+    setSyncStatus('ok', 'Connecting...');
+    return true;
+  } catch (e) {
+    console.error(e);
+    setSyncStatus('err', 'Connection failed');
+    return false;
+  }
+}
+
+function setSyncStatus(state, text) {
+  const dot = $('sync-dot');
+  dot.className = 'sync-dot' + (state === 'ok' ? ' ok' : state === 'err' ? ' err' : '');
+  $('sync-text').textContent = text;
+}
+
+// --- Add / delete ---
+async function addEntry(entry) {
+  if (entriesCol) {
+    await addDoc(entriesCol, { ...entry, createdAt: Date.now() });
+  } else {
+    entries.push({ ...entry, id: Date.now() });
+    saveLocal();
+    render();
+  }
+}
+
+async function deleteEntry(id) {
+  if (entriesCol) {
+    await deleteDoc(doc(entriesCol, id));
+  } else {
+    entries = entries.filter(e => e.id !== id);
+    saveLocal();
+    render();
+  }
+}
+
+async function clearAll() {
+  if (entriesCol) {
+    const snap = await getDocs(entriesCol);
+    const batch = writeBatch(db);
+    snap.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  } else {
+    entries = [];
+    saveLocal();
+    render();
+  }
+}
+
+// --- Rendering ---
+function render() {
+  let income = 0, expense = 0, monthTotal = 0;
+  const now = new Date();
+  const thisMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  const byMonth = {};
+  const byCat = {};
+
+  entries.forEach(e => {
+    const amt = Number(e.amount);
+    const mk = (e.date || '').slice(0, 7);
+    if (!mk) return;
+    byMonth[mk] = byMonth[mk] || { income: 0, expense: 0 };
+    if (e.category === 'Income') {
+      income += amt;
+      byMonth[mk].income += amt;
+    } else {
+      expense += amt;
+      byMonth[mk].expense += amt;
+      if (mk === thisMonth) {
+        monthTotal += amt;
+        byCat[e.category] = (byCat[e.category] || 0) + amt;
+      }
+    }
+  });
+
+  $('stat-income').textContent = fmt(income);
+  $('stat-expense').textContent = fmt(expense);
+  const sav = income - expense;
+  const se = $('stat-savings');
+  se.textContent = fmt(sav);
+  se.style.color = sav >= 0 ? '#4ade80' : '#f87171';
+  $('stat-month').textContent = fmt(monthTotal);
+
+  // Monthly
+  const ml = $('monthly-list');
+  const mks = Object.keys(byMonth).sort().reverse();
+  if (mks.length === 0) {
+    ml.innerHTML = '<div class="empty">No data yet</div>';
+  } else {
+    ml.innerHTML = mks.map(k => {
+      const m = byMonth[k];
+      const net = m.income - m.expense;
+      const label = new Date(k + '-01').toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      return `<div class="month-row">
+        <div class="month-name">${label}</div>
+        <div class="month-nums">
+          <span class="pos">+${fmt(m.income)}</span>
+          <span class="neg">-${fmt(m.expense)}</span>
+          <span class="${net >= 0 ? 'pos' : 'neg'}" style="font-weight:600;">${fmt(net)}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Categories
+  const cl = $('category-list');
+  const cks = Object.keys(byCat).sort((a, b) => byCat[b] - byCat[a]);
+  if (cks.length === 0) {
+    cl.innerHTML = '<div class="empty">No expenses this month</div>';
+  } else {
+    const max = Math.max(...cks.map(k => byCat[k]));
+    cl.innerHTML = cks.map(k => {
+      const pct = (byCat[k] / max) * 100;
+      return `<div class="cat-row">
+        <div style="min-width: 80px;">${escape(k)}</div>
+        <div class="cat-bar"><div class="cat-fill" style="width:${pct}%"></div></div>
+        <div style="min-width: 80px; text-align: right;">${fmt(byCat[k])}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Entries
+  const el = $('entries-list');
+  if (entries.length === 0) {
+    el.innerHTML = '<div class="empty">Tap + to add your first entry</div>';
+  } else {
+    const sorted = [...entries].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+    el.innerHTML = sorted.map(e => {
+      const isInc = e.category === 'Income';
+      return `<div class="entry">
+        <div class="entry-left">
+          <div class="entry-desc">${escape(e.desc)}</div>
+          <div class="entry-meta">${e.date} · ${escape(e.category)}</div>
+        </div>
+        <div class="entry-amount ${isInc ? 'pos' : 'neg'}">${isInc ? '+' : '-'}${fmt(e.amount)}</div>
+        <button class="entry-del" data-id="${e.id}">×</button>
+      </div>`;
+    }).join('');
+    el.querySelectorAll('[data-id]').forEach(b => {
+      b.addEventListener('click', () => {
+        if (confirm('Delete this entry?')) deleteEntry(b.dataset.id);
+      });
+    });
+  }
+}
+
+function escape(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// --- Modal ---
+function openModal() {
+  $('f-date').value = new Date().toISOString().slice(0, 10);
+  $('f-desc').value = '';
+  $('f-amount').value = '';
+  $('modal').classList.add('open');
+  setTimeout(() => $('f-desc').focus(), 100);
+}
+function closeModal() { $('modal').classList.remove('open'); }
+
+$('fab').addEventListener('click', openModal);
+$('cancel-btn').addEventListener('click', closeModal);
+$('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+
+$('save-btn').addEventListener('click', async () => {
+  const desc = $('f-desc').value.trim();
+  const amount = parseFloat($('f-amount').value);
+  const category = $('f-category').value;
+  const date = $('f-date').value;
+  if (!desc || !amount || amount <= 0 || !date) { alert('Fill all fields'); return; }
+  await addEntry({ desc, amount, category, date });
+  closeModal();
+});
+
+// --- Export ---
+$('export-btn').addEventListener('click', () => {
+  if (entries.length === 0) return alert('No data');
+  const wb = XLSX.utils.book_new();
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+  const rows = sorted.map(e => ({
+    Date: e.date, Description: e.desc, Category: e.category,
+    Type: e.category === 'Income' ? 'Income' : 'Expense',
+    Amount: Number(e.amount)
+  }));
+  const ws1 = XLSX.utils.json_to_sheet(rows);
+  ws1['!cols'] = [{ wch: 12 }, { wch: 28 }, { wch: 14 }, { wch: 10 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Entries');
+
+  const bm = {};
+  entries.forEach(e => {
+    const k = e.date.slice(0, 7);
+    bm[k] = bm[k] || { income: 0, expense: 0 };
+    if (e.category === 'Income') bm[k].income += Number(e.amount);
+    else bm[k].expense += Number(e.amount);
+  });
+  const mRows = Object.keys(bm).sort().map(k => ({
+    Month: k, Income: bm[k].income, Expenses: bm[k].expense, Savings: bm[k].income - bm[k].expense
+  }));
+  const ws2 = XLSX.utils.json_to_sheet(mRows);
+  ws2['!cols'] = [{ wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Monthly');
+
+  XLSX.writeFile(wb, 'expenses_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+});
+
+$('csv-btn').addEventListener('click', () => {
+  if (entries.length === 0) return alert('No data');
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+  const head = 'Date,Description,Category,Type,Amount\n';
+  const body = sorted.map(e => `${e.date},"${String(e.desc).replace(/"/g,'""')}",${e.category},${e.category === 'Income' ? 'Income' : 'Expense'},${Number(e.amount).toFixed(2)}`).join('\n');
+  const blob = new Blob([head + body], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'expenses.csv'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+$('clear-btn').addEventListener('click', async () => {
+  if (entries.length === 0) return;
+  if (confirm('Delete all ' + entries.length + ' entries? Cannot be undone.')) await clearAll();
+});
+
+// --- Config panel ---
+$('config-btn').addEventListener('click', () => {
+  $('setup-panel').style.display = $('setup-panel').style.display === 'none' ? 'block' : 'none';
+  const saved = localStorage.getItem(CONFIG_KEY);
+  if (saved) $('firebase-config').value = saved;
+});
+
+$('skip-config').addEventListener('click', () => {
+  $('setup-panel').style.display = 'none';
+});
+
+$('save-config').addEventListener('click', async () => {
+  const raw = $('firebase-config').value.trim();
+  if (!raw) return alert('Paste your Firebase config first');
+  try {
+    const cfg = JSON.parse(raw);
+    localStorage.setItem(CONFIG_KEY, raw);
+    if (unsubscribe) unsubscribe();
+    const ok = await initFirebase(cfg);
+    if (ok) {
+      $('setup-panel').style.display = 'none';
+      alert('Cloud sync enabled! Your data is now syncing.');
+    }
+  } catch (e) {
+    alert('Invalid JSON. Paste the config exactly as shown in Firebase console.');
+  }
+});
+
+// --- Service worker ---
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// --- Boot ---
+loadLocal();
+render();
+const savedConfig = localStorage.getItem(CONFIG_KEY);
+if (savedConfig) {
+  try { initFirebase(JSON.parse(savedConfig)); }
+  catch (e) { setSyncStatus('err', 'Config error'); }
+} else {
+  setSyncStatus('', 'Local only');
+}
+</script>
+</body>
+</html>
